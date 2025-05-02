@@ -4,49 +4,89 @@ import 'package:seminari_flutter/components/my_textfield.dart';
 import 'package:seminari_flutter/components/my_button.dart';
 import 'package:seminari_flutter/services/auth_service.dart';
 
-class LoginPage extends StatelessWidget {
-  LoginPage({super.key});
+class LoginPage extends StatefulWidget {
+  const LoginPage({super.key});
 
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
+  bool _isLoading = false;
+  final _authService = AuthService();
 
-  void signUserIn(BuildContext context) async {
-    final authService = AuthService();
+  @override
+  void initState() {
+    super.initState();
+    _checkLoginStatus();
+  }
 
+  Future<void> _checkLoginStatus() async {
+    await _authService.init();
+    if (_authService.isLoggedIn) {
+      if (mounted) {
+        context.go('/');
+      }
+    }
+  }
+
+  Future<void> signUserIn() async {
     final email = emailController.text;
     final password = passwordController.text;
 
     if (email.isEmpty || password.isEmpty) {
-      _showError(context, 'El email i la contrasenya no poden estar buits.');
+      _showError('El email i la contrasenya no poden estar buits.');
       return;
     }
 
-    final result = await authService.login(email, password);
+    setState(() => _isLoading = true);
 
-    if (result.containsKey('error')) {
-      _showError(context, result['error']);
-    } else {
-      context.go('/');
+    try {
+      final userData = await _authService.login(email, password);
+      print('Login successful - User ID: ${userData['id']}');
+      
+      if (mounted) {
+        context.go('/');
+      }
+    } catch (e) {
+      if (mounted) {
+        print('Login screen error: $e');
+        String errorMessage = e.toString();
+        if (errorMessage.contains('Exception: ')) {
+          errorMessage = errorMessage.replaceAll('Exception: ', '');
+        }
+        _showError(errorMessage);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
-  void _showError(BuildContext context, String message) {
+  void _showError(String message) {
     showDialog(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Error'),
-            content: Text(message),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-                child: const Text('OK'),
-              ),
-            ],
+      builder: (context) => AlertDialog(
+        title: const Text('Error'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
           ),
+        ],
+      ),
     );
+  }
+
+  @override
+  void dispose() {
+    emailController.dispose();
+    passwordController.dispose();
+    super.dispose();
   }
 
   @override
@@ -92,7 +132,19 @@ class LoginPage extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 25),
-                MyButton(onTap: () => signUserIn(context)),
+                MyButton(
+                  onTap: _isLoading ? null : signUserIn,
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Text('INICIAR SESSIÓ'),
+                ),
                 const SizedBox(height: 25),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
